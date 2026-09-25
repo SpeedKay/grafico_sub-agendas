@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 
 URL = "https://s3.sa-east-1.amazonaws.com/ckan.saude.gov.br/sctie/pesquisa_saude/csv/pesquisa_saude_csv.zip"
 
-# 1. Baixa e descompacta em memória
 resp = requests.get(URL)
 resp.raise_for_status()
 z = zipfile.ZipFile(io.BytesIO(resp.content))
@@ -24,7 +23,6 @@ with z.open(nome_csv) as f:
         on_bad_lines="skip",
     )
 
-# 2. Seleciona colunas úteis
 colunas_uteis = [
     "codigo_pesquisa", "uf_pesquisa", "ano_publicacao_edital",
     "subagenda_pesquisa", "modalidade_fomento", "natureza_pesquisa",
@@ -33,12 +31,10 @@ colunas_uteis = [
 ]
 df = df[colunas_uteis]
 
-# 3. Valor total por linha
 df["valor_total"] = df[["valor_sem_bolsa", "valor_bolsa", "valor_decit", "valor_parceiro"]].apply(
     pd.to_numeric, errors="coerce"
 ).sum(axis=1)
 
-# 4. LIMPEZA — precisa vir antes de qualquer agregação/gráfico
 df["ano_publicacao_edital"] = pd.to_numeric(df["ano_publicacao_edital"], errors="coerce")
 antes = len(df)
 df = df.dropna(subset=["ano_publicacao_edital"])
@@ -53,19 +49,16 @@ print("Período:", df["ano_publicacao_edital"].min(), "a", df["ano_publicacao_ed
 print(df["subagenda_pesquisa"].nunique(), "sub-agendas após limpeza")
 print(sorted(df["subagenda_pesquisa"].dropna().unique()))
 
-# 5. Concentração (recalculada já com dados limpos)
 top5_total = df["subagenda_pesquisa"].value_counts().head(5).sum()
 total = len(df)
 print(f"Top 5 sub-agendas concentram {top5_total/total:.1%} dos projetos (n={total})")
 
-# 6. Agregação — agora sim, com df já limpo
 evolucao = (
     df.groupby(["ano_publicacao_edital", "subagenda_pesquisa"])
     .agg(qtd_projetos=("codigo_pesquisa", "count"), valor_total=("valor_total", "sum"))
     .reset_index()
 )
 
-# 7. Gráfico
 pivot = evolucao.pivot_table(
     index="ano_publicacao_edital", columns="subagenda_pesquisa",
     values="qtd_projetos", aggfunc="sum", fill_value=0
